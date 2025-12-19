@@ -1,0 +1,4 @@
+- `make qemu` in one terminal
+  - to exit qemu later, press `Ctrl + A`, then `X`
+- `make gdb` in another terminal
+  - to exit gdb later, press `q`, then 'y' (for yes) and `ENTER`
