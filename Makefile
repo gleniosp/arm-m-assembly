@@ -13,4 +13,4 @@ gdb:
 	gdb-multiarch -q $(PROJECT).elf -ex "target remote localhost:1234"
 
 clean:
-	rm -rf *.out *.elf .gdb_history *.lst *.debug *.o
+	rm -rf *.out *.elf .gdb_history *.lst *.debug *.o *.bin

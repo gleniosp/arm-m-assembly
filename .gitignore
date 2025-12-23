@@ -4,3 +4,4 @@
 *.lst
 *.debug
 *.o
+*.bin
