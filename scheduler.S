@@ -7,7 +7,7 @@
 
 .section .vectors
 vector_table:
-    .word 0x20001000 // 4 KB memory above the initial 0x20000000 for the embedded SRAM location
+    .word 0x20001000 // 4 KB memory above the initial 0x20000000 for the embedded SRAM location. This is where the initial stack pointer will point to.
     .word reset_handler
 .org 0x3C // ARM Cortex-M3 systick location (https://developer.arm.com/documentation/dui0552/a/the-cortex-m3-processor/exception-model/vector-table)
     .word systick_handler
@@ -63,7 +63,33 @@ systick_handler:
     push {r0-r3}
 
 magic:
-    // this part of the code is used to restore the context (registers) stored by the systick_handler
+    // This part of the code is used to restore the context (registers) stored by the systick_handler.
+    // However, at the moment, this `magic` code is only using the default stack that we provided in the beginning of this
+    // assembly code, that is, the stack pointed by the address `.word 0x20001000` which we defined in the `vector_table:`
+    // part of the code in the beginning. To test the switching between the stacks that we manually created for the
+    // 3 tasks (stack_1 for task main1, stack_2 for task main2, stack_3 for task main3), we need to make this `magic`
+    // code also change the current Stack Pointer (sp) register to point to one of these three stacks in a round robin manner
+    // every time the systick_handler is triggered, so the code keeps alternating between the tasks. This works because
+    // each stack is setting the Program Counter (pc) register to point to its respective task, like stack_1 is setting
+    // `.word main1`.
+    //
+    // As we don't have this round robin implementation yet, what are doing is to run GDB connected to the QEMU
+    // and putting breakpoints in the `magic` label and a desired task. For example, we run the `break magic` command
+    // to put a breakpoint at the `magic` code and also `break main1` to put a breakpoint at the `main1` code. Then,
+    // we make the code continue with the `c` command until it stops at the first breakpoint, `magic`. At this point,
+    // before magic can pop the registers from the context (stack) and load them into the CPU registers and handle the
+    // control back to the exception handler, we manually do `set $sp=0x20000000` (because the `.data` section where
+    // the `stack_1` is allocated starts at this address), which sets the stack pointer register to the location of the `stack_1`.
+    // Then we do `c` again and let the `magic` code runs until the next breakpoint is reached.
+    // As `magic` will now pop from the stack and we manually set the stack pointer to point to the `stack_1`
+    // all 16 `.word...` instructions in the `stack_1` will be popped and loaded into the CPU registers. Then, `magic`
+    // returns the control to the exception handler and now the CPU sees the new values for its registers, one of them
+    // being the Program Counter (pc) register which will be pointing to the `main1` task. Then, as the next step,
+    // the CPU will simply start executing the `main1` task as pointed by the pc register. So, we'll see GDB
+    // breaking at the `main1` code/task next, because we put a breakpoint there.
+    //
+    // So, as a next step to improve this code, is to make the code switch between the 3 tasks without we doing this
+    // via GDB manually by setting the stack pointer ourselves.
     pop {r0-r3}
 
     mov r8, r0
@@ -103,7 +129,15 @@ main3:
     add r2, r2, #3;
     b main3
 
-    .zero 100
+    // This tells the assembler to put the following code for the stacks (stack_1, stack_2 and stack_3) in the .data section.
+    // And, the .data section is located in the RAM space according to the `map.ld` file. We made the RAM space point to the
+    // Embedded SRAM location, which starts at the 0x20000000 address for the Cortex M3. This way, we can not only read
+    // content from this location, but also write to it, which is required by our trick of pushing (writing) and
+    // popping (reading) values from the stack. If we were to put the stacks in the same space as the rest of the code,
+    // which is located in the .vectors and .text sections, which in turn is mapped to the MEM space by the `map.ld` file,
+    // we wouldn't be able to write to it, only read.
+    // As the stack_1 is the following code, this stack will then start at the beginning of the RAM space, 0x20000000.
+    .data
     .align 4
 stack_1:
     // The .word instructions below are addresses that will be load to all 16 registers for the Cortext M3 CPU.
