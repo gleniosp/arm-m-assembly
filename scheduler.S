@@ -90,6 +90,12 @@ magic:
     //
     // So, as a next step to improve this code, is to make the code switch between the 3 tasks without we doing this
     // via GDB manually by setting the stack pointer ourselves.
+    // Also, we're loading the stack values into the embedded SRAM. When the board is first loaded with the program,
+    // it'll load these values correctly. However, if we power off and on (restart) the board, it'll lose these initial
+    // RAM values. While working with QEMU here, it is fine. However, in the real world, we should initially load
+    // the `.data` section for the stacks in the program memory (flash memory) itself, along with the program code,
+    // then, we'd have a logic in the exception handler to copy this stack data into the SRAM so we can do reads/writes
+    // to the stack data there.
     pop {r0-r3}
 
     mov r8, r0
